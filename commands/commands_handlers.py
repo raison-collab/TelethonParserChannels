@@ -22,7 +22,9 @@ def check_args_count(expected_count: int):
                 await event.reply(f"**Ошибка! Проверьте формат ввода данных**")
                 return
             return await func(self, event, *args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -48,7 +50,8 @@ class CommandsHandler:
 
     async def chats_command(self, event: events.NewMessage.Event):
         with open(ALL_CHATS_FILENAME, 'w', encoding='utf8') as f:
-            chats = '\n'.join([f'{chat.title} - {chat.entity.id}' async for chat in self.client.iter_dialogs() if isinstance(chat.entity, types.Channel)])
+            chats = '\n'.join([f'{chat.title} - {chat.entity.id}' async for chat in self.client.iter_dialogs() if
+                               isinstance(chat.entity, types.Channel)])
             f.write(chats)
 
         await self.client.send_file(event.chat_id, ALL_CHATS_FILENAME)
@@ -73,7 +76,8 @@ class CommandsHandler:
 
         listening_chats = await self.ch.listening_chats_list()
 
-        st = '\n'.join([f'{chat.title} - {chat.entity.id}' async for chat in self.client.iter_dialogs() if chat.entity.id in listening_chats])
+        st = '\n'.join([f'{chat.title} - {chat.entity.id}' async for chat in self.client.iter_dialogs() if
+                        chat.entity.id in listening_chats])
 
         with open(LISTENING_CHATS_FILENAME, 'w', encoding='utf8') as f:
             f.write(st)
@@ -193,16 +197,24 @@ class CommandsHandler:
     # todo refactor methods. Write method with validate args and validate keywords
     @check_args_count(2)
     async def add_theme_command(self, event: events.NewMessage.Event):
+        # todo обновить описание добавления тем
+        # todo добавить команду на обновление интервала темы
         msg = event.message.to_dict()['message']
 
         command_data = msg.split()[1]
 
-        if len(command_data.split('-')) < 2:
+        if len(command_data.split('-')) < 3:
             await event.reply('Проверьте правильность ввода информации, возможно вы ошиблись с форматом')
             return
 
         theme_name = command_data.split('-')[0].replace('+', ' ')
-        keywords = list(set(command_data.split('-')[1:]))
+        interval = command_data.split('-')[1]
+        # period = command_data.split('-')[2]
+        keywords = list(set(command_data.split('-')[2:]))
+
+        if not interval.isdigit():
+            await event.reply(f"Интервал должен быть целым числом")
+            return
 
         logger.info(LoggerTags.COMMAND.value + f"Add with {theme_name=} and {keywords=}")
 
@@ -216,14 +228,15 @@ class CommandsHandler:
                 continue
             keywords_db.append(w)
         try:
-            await self.themes.add_theme(theme_name, keywords_db)
+            await self.themes.add_theme(theme_name, interval, keywords_db)
         except IntegrityError as e:
             logger.error(e)
             await event.reply("**Ошибка!** Возможно тема с таким именем уже есть")
             return
 
         if errors_words:
-            await event.reply(f"Были добавлены слова, кроме этих\n\n{'-'.join(errors_words)}\n\nТак как их **нет в базе данных**")
+            await event.reply(
+                f"Были добавлены слова, кроме этих\n\n{'-'.join(errors_words)}\n\nТак как их **нет в базе данных**")
         else:
             await event.reply(f"**Были добавлены все слова**")
 
@@ -264,7 +277,8 @@ class CommandsHandler:
             return
 
         if errors_words:
-            await event.reply(f"Были добавлены слова, кроме этих\n\n{'-'.join(errors_words)}\n\nТак как их **нет в базе данных**")
+            await event.reply(
+                f"Были добавлены слова, кроме этих\n\n{'-'.join(errors_words)}\n\nТак как их **нет в базе данных**")
         else:
             await event.reply(f"**Были добавлены все слова**")
 
@@ -305,7 +319,8 @@ class CommandsHandler:
             return
 
         if errors_words:
-            await event.reply(f"Были удалены слова, кроме этих\n\n{'-'.join(errors_words)}\n\nТак как их **нет в базе данных**")
+            await event.reply(
+                f"Были удалены слова, кроме этих\n\n{'-'.join(errors_words)}\n\nТак как их **нет в базе данных**")
         else:
             await event.reply(f"**Были удалены все слова**")
 
@@ -331,7 +346,8 @@ class CommandsHandler:
             return
 
         if data['errors_names']:
-            await event.reply(f"Были удалены темы, кроме этих\n\n{'-'.join(data['errors_names'])}\n\nТак как их **нет в базе данных**")
+            await event.reply(
+                f"Были удалены темы, кроме этих\n\n{'-'.join(data['errors_names'])}\n\nТак как их **нет в базе данных**")
         else:
             await event.reply(f"**Были удалены все темы**")
 
@@ -345,7 +361,7 @@ class CommandsHandler:
 
         command_data = command_data[1]
 
-        themes_names = list(set(command_data.split('-').replace('+', ' ')))
+        themes_names = list(set([data.replace('+', ' ') for data in command_data.split('-')]))
 
         logger.info(LoggerTags.COMMAND.value + f" Following {themes_names}")
 
@@ -357,8 +373,14 @@ class CommandsHandler:
             await event.reply("**Ошибка!** Ошибка с обновлением статуса отслеживания темы")
             return
 
+        if data['already_followed']:
+            await event.reply(
+                f"**Не Обновлен статус отследивания** у тем:\n\n{'-'.join(data['already_followed'])}\n\nТак как они **Уже отслеживаютя**"
+            )
+
         if data['errors_themes']:
-            await event.reply(f"Обновлен статус отследивания у всех тем, кроме этих\n\n{'-'.join(data['errors_themes'])}\n\nТак как их **нет в базе данных**")
+            await event.reply(
+                f"Обновлен статус отследивания у всех тем, кроме этих\n\n{'-'.join(data['errors_themes'])}\n\nТак как их **нет в базе данных**")
         else:
             await event.reply(f"**Обновлен статус отследивания у всех тем**")
 
@@ -374,7 +396,7 @@ class CommandsHandler:
 
         themes_names = list(set(command_data.split('-').replace('+', ' ')))
 
-        logger.info(LoggerTags.COMMAND.value + f" Following {themes_names}")
+        logger.info(LoggerTags.COMMAND.value + f" Unfollowing {themes_names}")
 
         try:
             data = await self.themes.unfollow_themes(themes_names)
@@ -384,8 +406,46 @@ class CommandsHandler:
             await event.reply("**Ошибка!** Ошибка с обновлением статуса отслеживания темы")
             return
 
+        if data['already_unfollowed']:
+            await event.reply(
+                f"**Не Обновлен статус отследивания** у тем:\n\n{'-'.join(data['already_unfollowed'])}\n\nТак как они **Не отслеживались ранее**"
+            )
+
         if data['errors_themes']:
             await event.reply(
                 f"Обновлен статус отследивания у всех тем, кроме этих\n\n{'-'.join(data['errors_themes'])}\n\nТак как их **нет в базе данных**")
         else:
             await event.reply(f"**Обновлен статус отследивания у всех тем**")
+
+    @check_args_count(2)
+    async def change_interval_theme(self, event: events.NewMessage.Event):
+        print('called')
+        msg = event.message.to_dict()['message']
+
+        msg_words = msg.split()
+        payload = msg_words[1].split('-')
+        theme_name = payload[0]
+        new_interval = payload[1]
+
+        if not new_interval.isdigit():
+            await event.reply(
+                f"Интервал должен быть **целым числом**"
+            )
+            return
+
+        try:
+            theme = await self.themes.change_interval_theme(theme_name, int(new_interval))
+            if theme is None:
+                await event.reply(
+                    f"**Возникла внутренняя ошибка**\n\nОбратитесь в поддержку"
+                )
+                return
+        except ValueError as e:
+            await event.reply(
+                f"**Ошибка!**\n\n{e}"
+            )
+            return
+
+        await event.reply(f"**Успешно обновлено**\n\nНазвание: {theme.theme_name}\nИнтервал: {theme.interval}")
+
+

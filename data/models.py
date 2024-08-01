@@ -6,13 +6,6 @@ class Base(DeclarativeBase):
     pass
 
 
-# class AllChatModel(Base):
-#     __tablename__ = 'all_chats'
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     chat_id = Column(String(length=250), nullable=False, unique=True, index=True)
-#     chat_name = Column(String, nullable=False)
-
-
 class ListeningChatModel(Base):
     __tablename__ = 'listening_chats'
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -32,6 +25,7 @@ class ThemeModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     theme_name = Column(String, unique=True, nullable=False, index=True)
     is_following = Column(Boolean, nullable=False, default=False)
+    interval = Column(Integer, nullable=False)
     keywords = relationship("KeywordsModel", secondary=theme_keyword_association, back_populates="themes")
 
 

@@ -68,22 +68,15 @@ class ThemeDB:
     id: int
     theme_name: str
     is_following: bool
+    interval: int
     keywords: List[KeywordsDB]
 
 
 @dataclass
 class AddThemeDB:
     theme_name: str
+    interval: int
     keywords: List[KeywordsDB]
-
-
-@dataclass
-class MessageDB(ChatIdMixin):
-    message_id: str
-    message: str
-    date: datetime.datetime
-    links: Optional[str] = None
-    grouped_id: Optional[int] = None
 
 
 @dataclass
@@ -94,3 +87,12 @@ class FileDB(ChatIdMixin):
     file_type: str
     message_id: str
     original_filename: Optional[str] = None
+
+
+@dataclass
+class MessageDB(ChatIdMixin):
+    message_id: str
+    message: str
+    date: datetime.datetime
+    links: Optional[str] = None
+    grouped_id: Optional[int] = None

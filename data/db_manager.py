@@ -1,3 +1,4 @@
+import datetime
 from pprint import pprint
 from typing import List, Optional
 
@@ -102,6 +103,7 @@ class ThemesDataManager(ThemeInterface):
                 id=theme.id,
                 theme_name=theme.theme_name,
                 is_following=theme.is_following,
+                interval=theme.interval,
                 keywords=await self.get_keyword_list_for_theme(theme.theme_name)
             )
             for theme in themes_all
@@ -147,7 +149,6 @@ class ThemesDataManager(ThemeInterface):
 
         for keyword in keywords:
             if keyword.word not in old_keywords_words:
-
                 kw = await self.session.execute(
                     select(KeywordsModel).where(KeywordsModel.word == keyword.word)
                 )
@@ -200,7 +201,11 @@ class ThemesDataManager(ThemeInterface):
                 await self.session.commit()
             keywords.append(keyword)
 
-        new_theme = ThemeModel(theme_name=theme.theme_name, keywords=keywords)
+        new_theme = ThemeModel(
+            theme_name=theme.theme_name,
+            keywords=keywords,
+            interval=theme.interval
+        )
         self.session.add(new_theme)
         try:
             await self.session.commit()
@@ -282,6 +287,28 @@ class ThemesDataManager(ThemeInterface):
         logger.debug(f"{LoggerTags.DATABASE.value} Following themes with {theme_names=}")
 
         _ = [await self.unfollow_theme(name) for name in theme_names]
+
+    async def change_interval(self, theme_name: str, interval: int):
+        logger.debug(f"{LoggerTags.DATABASE.value} Change interval with {theme_name=}" f"{interval=}")
+
+        res = await self.session.execute(
+            update(ThemeModel)
+            .where(ThemeModel.theme_name == theme_name)
+            .values(interval=interval)
+            .returning(ThemeModel)
+        )
+
+        updated_theme = res.scalars().first()
+
+        if updated_theme is not None:
+            try:
+                await self.session.commit()
+                return updated_theme
+            except IntegrityError as e:
+                await self.session.rollback()
+                raise e
+
+        return None
 
 
 class KeywordsDataManager(KeywordInterface):
@@ -393,12 +420,26 @@ class MessagesDataManager(MessagesInterface):
         logger.debug(f"{LoggerTags.DATABASE.value} Get message {message_id} from chat {chat_id}")
         async with self.asession() as session:
             res = await session.execute(
-                select(MessagesModel).where(
+                select(MessagesModel)
+                .options(joinedload(MessagesModel.files))
+                .where(
                     MessagesModel.message_id == message_id,
                     MessagesModel.chat_id == chat_id
                 )
             )
             return res.scalars().first()
+
+    async def get_message_by_interval(self, start_time: datetime.datetime) -> Optional[List[MessagesModel]]:
+        logger.debug(f"{LoggerTags.DATABASE.value} Get message by interval {start_time=}")
+
+        async with self.asession() as session:
+            result = await session.execute(
+                select(MessagesModel)
+                .options(joinedload(MessagesModel.files))
+                .where(MessagesModel.date >= start_time)
+            )
+
+            return result.unique().scalars().all()
 
     async def add_message(self, message: MessageDB):
         logger.debug(f"{LoggerTags.DATABASE.value} Add message")
@@ -450,7 +491,6 @@ class FilesDataManager(FilesInterface):
         logger.debug(f"{LoggerTags.DATABASE.value} Adding file")
 
         async with self.asession() as session:
-
             exists = await self.get_file(file.document_id)
 
             if exists is None:
@@ -467,9 +507,13 @@ class FilesDataManager(FilesInterface):
                 )
                 try:
                     await session.commit()
+                    logger.debug(f"{LoggerTags.DATABASE.value} File added successfully")
                 except IntegrityError as e:
                     await session.rollback()
+                    logger.error(f"{LoggerTags.DATABASE.value} Error adding file: {e}")
                     raise e
+            else:
+                logger.debug(f"{LoggerTags.DATABASE.value} File already exists: {file.document_id}")
 
     async def get_file(self, document_id: str) -> Optional[FilesModel]:
         logger.debug(f"{LoggerTags.DATABASE.value} Get file {document_id=}")
@@ -485,7 +529,6 @@ class FilesDataManager(FilesInterface):
         logger.debug(f"{LoggerTags.DATABASE.value} Get file {message_id=} {chat_id=}")
 
         async with self.asession() as session:
-
             res = await session.execute(
                 select(FilesModel).where(
                     FilesModel.message_id == message_id,

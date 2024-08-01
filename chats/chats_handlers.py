@@ -9,7 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from telethon import events, TelegramClient, types
 from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument
 
-from config import LISTENING_CHATS_FILENAME, ALL_CHATS_FILENAME, BOT_URL, LoggerTags, UPLOAD_FOLDER, MessageFiletypes
+from config import LISTENING_CHATS_FILENAME, ALL_CHATS_FILENAME, BOT_URL, LoggerTags, UPLOAD_FOLDER, MessageFiletypes, \
+    TIMEZONE
 from data import FilesModel
 from data.dataclasses import AddChatDB, MessageDB, FileDB
 from data.db_manager import DBManager
@@ -62,10 +63,7 @@ class ChatsHandler:
         """
         logger.info(f"{LoggerTags.HANDLER.value} Detected new message from {event.message.peer_id.channel_id}")
 
-        moscow_tz = pytz.timezone('Europe/Moscow')
-        new_date = event.message.date.astimezone(moscow_tz)
-
-        link_pattern = re.compile(r'/\[([^/\]]+)/\]\((https?://[^/\)]+)/\)')
+        new_date = event.message.date.astimezone(TIMEZONE)
 
         links_ent = event.message.entities
 
@@ -83,7 +81,7 @@ class ChatsHandler:
             links=','.join(links) if links else None
         )
 
-        await self.db_manager.messages.add_message(message_data)
+        file_record = None
 
         if event.message.media:
 
@@ -96,7 +94,7 @@ class ChatsHandler:
 
             if isinstance(event.message.media, MessageMediaPhoto):
                 file_name = f"{event.message.photo.id}-{event.chat.id}-{event.message.id}{event.message.file.ext}"
-                file_type = MessageFiletypes.DOCUMENT.value
+                file_type = MessageFiletypes.PHOTO.value
                 document_id = event.message.photo.id
 
             elif isinstance(event.message.media, MessageMediaDocument):
@@ -124,11 +122,15 @@ class ChatsHandler:
                 original_filename=original_filename
             )
 
-            # todo при отправке нескольких фото, прикрепленных к сообщению, сохраняются не все
+        # todo при отправке нескольких фото, прикрепленных к сообщению, сохраняются не все
+        await self.db_manager.messages.add_message(message_data)
+
+        if file_record:
             await self.db_manager.files.add_file(file_record)
 
         if await self.kh.check_contains(event.message.text.lower().replace("ё", "е")):
-            logger.info(f"{LoggerTags.HANDLER.value} Forward message id={message_data.message_id} from {message_data.chat_id} to moderation chat")
+            logger.info(
+                f"{LoggerTags.HANDLER.value} Forward message id={message_data.message_id} from {message_data.chat_id} to moderation chat")
             await self.client.forward_messages(BOT_URL, event.message)
 
     async def add_chat(self, chat: str | int):

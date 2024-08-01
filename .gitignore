@@ -6,3 +6,4 @@ listen_chats.txt
 themes.txt
 .env
 media/
+logs/

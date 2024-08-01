@@ -3,8 +3,10 @@ import os
 import string
 from enum import Enum
 
+import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
+from loguru import logger
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from telethon import TelegramClient
 
@@ -24,6 +26,12 @@ COMMAND_CHAT = os.getenv('COMMAND_CHAT')
 # настройка логирования
 # logging.basicConfig(level=logging.INFO)
 # logger = logging.getLogger(__name__)
+logger.add(
+    "logs/logs.log",
+    rotation="5 MB",
+    compression="zip",
+    retention=4
+)
 
 # Команды и их описание
 commands = {
@@ -38,12 +46,13 @@ commands = {
     '`/removeKeyword <KEYWORD>`': '**Удалить ключевое слово из спика.**\nНеобходимо ввести в формате "/addKeyword <KEYWORD>".\n**Важно**: <KEYWORD> - одно слово\n',
     '`/removeKeywords <KEYWORD>-<KEYWORD>`': '**Удалить ключевые слова из спика.**\nНеобходимо ввести в формате "/addKeyword <KEYWORD>-<KEYWORD>".\n**Важно**: <KEYWORD> - одно слово, слова разделены символом "-"\n',
     '`/allThemes`': '**Файл со списком тем**\n',
-    '`/addTheme <THEME_NAME>-<KEYWORD>-<KEYWORD>`': '**Добавить тему**\nНеобходимо ввести в формате "<THEME_NAME>-<KEYWORD>-<KEYWORD>", где\nTHEME_NAME - название темы, которую хотите добавить\nKEYWORD - ключево слово, которое должно быть в этой теме\n**Важно** ключевое слово должно быть в базе данных иначе оно не будет включено в тему\n',
+    '`/addTheme THEME_NAME-INTERVAL-KEYWORD-KEYWORD`': '**Добавить тему**\nНеобходимо ввести в формате "THEME_NAME-KEYWORD-KEYWORD", где\nTHEME_NAME - название темы, которую хотите добавить\nINTERVAL - целое число секунд\nKEYWORD - ключево слово, которое должно быть в этой теме\n**Важно** ключевое слово должно быть в базе данных иначе оно не будет включено в тему\n',
     '`/addKeyWordsToTheme <THEME_NAME>-<KEYWORD>-<KEYWORD>`': '**Добавить ключевые слова в тему**\nНеобходимо ввести в формате "<THEME_NAME>-<KEYWORD>-<KEYWORD>", где\nTHEME_NAME - название темы, которую хотите добавить\nKEYWORD - ключево слово, которое должно быть в этой теме\n**Важно** ключевое слово должно быть в базе данных иначе оно не будет включено в тему\n',
     '`/removeKeywordsFromTheme <THEME_NAME>-<KEYWORD>-<KEYWORD>`': '**Удалить ключевые слова из темы**\nНеобходимо ввести в формате "<THEME_NAME>-<KEYWORD>-<KEYWORD>", где\nTHEME_NAME - название темы, которую хотите добавить\nKEYWORD - ключево слово, которое должно быть в этой теме\n**Важно** ключевое слово должно быть в базе данных иначе оно не будет включено в тему\n',
-    '`/removeThemes <THEME_NAME>-<THEME_NAME>`': '**Удалить тему/темы**\nНеобходимо ввести в формате "<THEME_NAME>-<THEME_NAME>", где\nTHEME_NAME - название темы, которую хотите удалить\n**Важно** темы должны быть в базе данных\n',
-    '`/followThemes <THEME_NAME>-<THEME_NAME>`': '**Начать отслеживать тему/темы**\nНеобходимо ввести в формате "<THEME_NAME>-<THEME_NAME>", где\nTHEME_NAME - название темы, которую хотите отслеживать\n**Важно** темы должны быть в базе данных\n',
-    '`/unfollowThemes <THEME_NAME>-<THEME_NAME>`': '**Прекратить отслеживать тему/темы**\nНеобходимо ввести в формате "<THEME_NAME>-<THEME_NAME>", где\nTHEME_NAME - название темы, которую больше не хотите отслеживать\n**Важно** темы должны быть в базе данных\n',
+    '`/removeThemes <THEME_NAME>-<THEME_NAME>`': '**Удалить тему/темы**\nНеобходимо ввести в формате "<THEME_NAME>-<THEME_NAME>", где\n**THEME_NAME** - название темы, которую хотите удалить\n**Важно** темы должны быть в базе данных\n',
+    '`/followThemes <THEME_NAME>-<THEME_NAME>`': '**Начать отслеживать тему/темы**\nНеобходимо ввести в формате "<THEME_NAME>-<THEME_NAME>", где\n**THEME_NAME** - название темы, которую хотите отслеживать\n**Важно** темы должны быть в базе данных\n',
+    '`/unfollowThemes <THEME_NAME>-<THEME_NAME>`': '**Прекратить отслеживать тему/темы**\nНеобходимо ввести в формате "<THEME_NAME>-<THEME_NAME>", где\n**THEME_NAME** - название темы, которую больше не хотите отслеживать\n**Важно** темы должны быть в базе данных\n',
+    '`/changeIntervalTheme THEME_NAME-NEW_INTERVAL`': '**Установить для темы новый интервал**\nНеобходимо ввести в формате "THEME_NAME NEW_INTERVAL", где\n**THEME_NAME** - название темы, интревал которой надо изменить\n**NEW_INTERVAL** - (целое число) новый интервал в секундах\n'
 }
 
 client = TelegramClient('parser', API_ID, API_HASH)
@@ -55,6 +64,8 @@ KEYWORDS_FILENAME = "keywords.txt"
 THEMES_FILENAME = "themes.txt"
 
 IGNORE_SYMBOLS = string.punctuation
+
+TIMEZONE = pytz.timezone('Europe/Moscow')
 
 UPLOAD_FOLDER = os.getcwd() + "\\media"
 
